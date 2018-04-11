@@ -1,12 +1,15 @@
 import random
-import unittest
+# import unittest
 import itertools
 from collections import namedtuple, defaultdict, OrderedDict
+
+import matplotlib.pyplot as plt
 
 # 6 possible colors
 COLORS = "ROYGBP"
 Result = namedtuple("Result", ["exact_matches", "fuzzy_matches"])
 random.seed(1)
+
 
 def evaluate_matches(solution, guess):
     validate_input(solution)
@@ -24,6 +27,7 @@ def evaluate_matches(solution, guess):
 
     return Result(exact_matches=num_exact_matches, fuzzy_matches=num_total_matches - num_exact_matches)
 
+
 def validate_input(color_string):
     if not isinstance(color_string, str):
         raise ValueError("Should be string")
@@ -34,6 +38,7 @@ def validate_input(color_string):
     if not (set(color_string) <= set(COLORS)):
         raise ValueError("String contains an invalid color")
 
+
 def count_colors(color_string):
     color_count = defaultdict(int)
     for c in color_string:
@@ -42,77 +47,82 @@ def count_colors(color_string):
     return color_count
 
 
-def ai_guess(guess_history):
-    # for now, this will be random
-    return "".join(random.choices(COLORS, k=4))
-
-
 def check_guess(solution, guess):
     matches = evaluate_matches(solution, guess)
     return matches.exact_matches == 4
 
 
-def ai_guessing(solution, num_trials=20):
-    guess_history = []
+def ai_guessing(solution):
 
-
-    pure_colors = [c * 4 for c in COLORS]
+    pure_colors = [c * 4 for c in COLORS]  # RRRR
     color_counts = OrderedDict()
     counter_of_colors = 0
 
-    for guess_count, guess in enumerate(pure_colors, 1):
+    for guess_count, guess in enumerate(pure_colors[:-1], 1):
 
         matches = evaluate_matches(solution, guess)
-        guess_history.append(guess)
         total_matches = matches.exact_matches  # all colors are the same, so only get exact matches
         if total_matches == 4:
-            return guess_count
+            return guess_count, guess
 
-        color_counts[guess[0]] = total_matches
+        if total_matches > 0:
+            color_counts[guess[0]] = total_matches
 
         counter_of_colors += total_matches
         if counter_of_colors == 4:
             break
 
-    # do the factorial of strings
-    initial_guess = sorted("".join([key * count for key, count in color_counts.items()]))
-    for guess_count, guess_perm in enumerate(itertools.permutations(initial_guess), guess_count + 1):
-        guess = "".join(guess_perm)
-        matches = evaluate_matches(solution, guess)
-        #print(matches)
-        if matches.exact_matches == 4:
-            return guess_count
+    if counter_of_colors < 4:
+        color_counts[pure_colors[-1][0]] = 4 - sum(color_counts.values())
 
-    return False
+    # check positions using placeholders
 
+    placeholder = sorted(set(COLORS) - set(color_counts.keys()))[0]
 
-class TestMastermind(unittest.TestCase):
-    def test_count_colors(self):
-        self.assertEqual(count_colors("ROYY"), dict(R=1, O=1, Y=2))
+    our_solution = [placeholder for _ in range(4)]
 
-    def test_validation(self):
-        self.assertRaises(ValueError, evaluate_matches, "ROYG", "ROYX")
+    number_existing_matches = 0
+    search_colors = list(color_counts.keys())
+    last_color = search_colors.pop()
+    for color in search_colors:
+        matches_for_color = color_counts[color]
+        matches_found_for_color = 0
+        for i in range(3):
+            if our_solution[i] != placeholder:
+                continue
+            our_solution[i] = color
+            guess = "".join(our_solution)
+            matches = evaluate_matches(solution, guess)
+            guess_count += 1
+            if matches.exact_matches > number_existing_matches:  # should be
+                our_solution[i] = color
+                number_existing_matches += 1
+                matches_found_for_color += 1
+            else:
+                our_solution[i] = placeholder
 
-    def test_fuzzy_and_exact_match(self):
-        solution = "ROYY"
-        guesses = [
-            ("OGGR", Result(exact_matches=0, fuzzy_matches=2)),
-            ("ROYY", Result(exact_matches=4, fuzzy_matches=0)),
-            ("YGGP", Result(exact_matches=0, fuzzy_matches=1)),
-            ("YYGG", Result(exact_matches=0, fuzzy_matches=2)),
-            ("ROOP", Result(exact_matches=2, fuzzy_matches=0)),
-            ("YOOR", Result(exact_matches=1, fuzzy_matches=2)),
-        ]
-        for guess, result in guesses:
-            self.assertEqual(evaluate_matches(solution, guess), result)
+            if matches_found_for_color == matches_for_color:
+                break
 
-    def test_ai(self):
-        solution = "YROY"
-        result = ai_guessing(solution=solution, num_trials=2 * 6 ** 4)
-        self.assertTrue(bool(result))
-        print(result)
-        self.assertLess(result, 30)
+        if matches_found_for_color < matches_for_color:
+            our_solution[3] = color
+            number_existing_matches += 1
+
+    our_solution = "".join([(x if x != placeholder else last_color) for x in our_solution])
+
+    return guess_count + 1, our_solution
 
 
 if __name__ == "__main__":
-    unittest.main()
+    distribution = []
+    for permutation in itertools.permutations(COLORS * 4, r=4):
+        solution = "".join(permutation)
+        count, guess = ai_guessing(solution)
+        assert (check_guess(solution, guess))
+        distribution.append(count)
+
+    winners = sum([int(x <= 10) for x in distribution])
+    print("{:.2f}% winners".format(100 * winners / len(distribution)))
+
+    plt.hist(distribution)
+    plt.show()
