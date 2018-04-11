@@ -1,6 +1,7 @@
 import random
 import unittest
-from collections import namedtuple, defaultdict
+import itertools
+from collections import namedtuple, defaultdict, OrderedDict
 
 # 6 possible colors
 COLORS = "ROYGBP"
@@ -45,18 +46,42 @@ def ai_guess(guess_history):
     # for now, this will be random
     return "".join(random.choices(COLORS, k=4))
 
+
 def check_guess(solution, guess):
     matches = evaluate_matches(solution, guess)
     return matches.exact_matches == 4
 
+
 def ai_guessing(solution, num_trials=20):
     guess_history = []
-    for guess_index in range(num_trials):
-        guess = ai_guess(guess_history)
-        # print(guess)
-        if check_guess(solution, guess):
-            return guess_index + 1
+
+
+    pure_colors = [c * 4 for c in COLORS]
+    color_counts = OrderedDict()
+    counter_of_colors = 0
+
+    for guess_count, guess in enumerate(pure_colors, 1):
+
+        matches = evaluate_matches(solution, guess)
         guess_history.append(guess)
+        total_matches = matches.exact_matches  # all colors are the same, so only get exact matches
+        if total_matches == 4:
+            return guess_count
+
+        color_counts[guess[0]] = total_matches
+
+        counter_of_colors += total_matches
+        if counter_of_colors == 4:
+            break
+
+    # do the factorial of strings
+    initial_guess = sorted("".join([key * count for key, count in color_counts.items()]))
+    for guess_count, guess_perm in enumerate(itertools.permutations(initial_guess), guess_count + 1):
+        guess = "".join(guess_perm)
+        matches = evaluate_matches(solution, guess)
+        #print(matches)
+        if matches.exact_matches == 4:
+            return guess_count
 
     return False
 
@@ -82,8 +107,11 @@ class TestMastermind(unittest.TestCase):
             self.assertEqual(evaluate_matches(solution, guess), result)
 
     def test_ai(self):
-        solution = "ROYY"
-        self.assertEqual(1566, ai_guessing(solution=solution, num_trials=2*6**4))
+        solution = "YROY"
+        result = ai_guessing(solution=solution, num_trials=2 * 6 ** 4)
+        self.assertTrue(bool(result))
+        print(result)
+        self.assertLess(result, 30)
 
 
 if __name__ == "__main__":
